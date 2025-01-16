@@ -1,0 +1,4 @@
+elasticsearch==8.10.0
+requests
+beautifulsoup4
+kafka-python
