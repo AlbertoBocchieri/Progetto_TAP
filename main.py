@@ -9,7 +9,7 @@ import time
 # Configura Kafka e Elasticsearch
 KAFKA_BROKER = "localhost:9092"
 TOPIC_NAME = "torrent-topic"
-ES_HOST = "http://host.docker.internal:9200"
+ES_HOST = "http://localhost:9200"
 INDEX_NAME = "torrent_data"
 
 # Inizializza il producer Kafka

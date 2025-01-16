@@ -10,7 +10,7 @@ import hashlib
 # Configurazioni
 KAFKA_BROKER = "localhost:9092"  # Sostituisci con il tuo broker Kafka
 TOPIC_NAME = "torrent-topic"
-ES_HOST = "http://host.docker.internal:9200"  # Sostituisci con il tuo endpoint Elasticsearch
+ES_HOST = "http://localhost:9200"  # Sostituisci con il tuo endpoint Elasticsearch
 INDEX_NAME = "torrent_data"
 TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
 TELEGRAM_CHAT_ID = "221067200"
