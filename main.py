@@ -5,12 +5,15 @@ from elasticsearch import Elasticsearch
 from kafka import KafkaProducer
 import json
 import time
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Configura Kafka e Elasticsearch
 KAFKA_BROKER = "localhost:9092"
 TOPIC_NAME = "torrent-topic"
 ES_HOST = "http://localhost:9200"
 INDEX_NAME = "torrent_data"
+TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
 
 # Inizializza il producer Kafka
 producer = KafkaProducer(
@@ -50,8 +53,8 @@ def torrent_exists(title):
 def scrape_site():
     """
     Esegue lo scraping del sito per trovare nuovi torrent.
-    """
-    url = "https://kickasstorrent.cr/movies/"  # Cambia con l'URL reale
+    """ 
+    url = "https://kickasstorrent.cr/user/NAHOM1/"  # Cambia con l'URL reale
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
 
