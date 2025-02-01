@@ -7,12 +7,17 @@ from qbittorrentapi import Client
 from kafka import KafkaProducer
 from elasticsearch import Elasticsearch
 import json
+import asyncio
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes
 )
+
+qbt_client = Client(host='localhost', port=8080, username='admin', password='adminadmin')
+progress_message_id = None
 
 # Configura Kafka e Elasticsearch
 KAFKA_BROKER = "localhost:9092"
@@ -22,6 +27,10 @@ INDEX_NAME = "torrent_data"
 TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
 
 es = Elasticsearch("http://localhost:9200")
+
+GREEN = "\033[92m"   # Verde (puoi usare anche \033[32m)
+RED   = "\033[91m"   # Rosso (o \033[31m)
+RESET = "\033[0m"    # Resetta il colore
 
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER,
@@ -136,7 +145,75 @@ async def download_progress(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("Progresso Download:\n" + "\n".join(progress_lines))
             except Exception as e:
                 await update.message.reply_text(f"Errore nel recupero dei progressi: {e}")
+
+
+
+
+# Funzione asincrona per ottenere il progresso dei download in tempo reale
+async def get_download_progress(qbt_client):
+    try:
+        # Otteniamo le informazioni sui torrent attivi
+        torrents = await asyncio.to_thread(qbt_client.torrents_info)
+        progress_report = ""
         
+        for torrent in torrents:
+            # Recuperiamo le informazioni di base
+            name = torrent.name
+            progress = torrent.progress * 100  # Progresso come percentuale
+            size = torrent.total_size
+            num_peers = torrent.num_seeds + torrent.num_leechs
+
+            bar_length = 20  # lunghezza della barra
+            filled_length = int(bar_length * torrent.progress)
+            # Usa caratteri blocco pieni e leggeri per il riempimento della barra
+            bar = "\u2588" * filled_length + "\u2591" * (bar_length - filled_length)
+
+            # Mostriamo il nome e il progresso
+            progress_report += f"Nome: {name}\n"
+            progress_report += f"Download progress: [{bar}] {torrent.progress * 100:.2f}%\n"
+            progress_report += f"Dimensione: {size / (1024 * 1024 * 1024):.2f} GB\n"
+            progress_report += f"Peers: {num_peers}\n"
+            
+            
+            
+            # Aggiungiamo un controllo sulla velocità di download (se presente)
+            dl_speed = torrent.dlspeed
+            if dl_speed:
+                progress_report += f"Velocità di download: {dl_speed / 1024:.2f} KB/s\n"
+            else:
+                progress_report += "Velocità di download non disponibile.\n"
+                
+            progress_report += "-" * 50 + "\n"
+        
+        return progress_report
+
+    except Exception as e:
+        return f"Errore durante il recupero dei dati: {e}"
+
+# Funzione asincrona per monitorare i download e aggiornare periodicamente Telegram
+async def monitor_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global progress_message_id
+    try:
+        while True:
+            progress_report = await get_download_progress(qbt_client)
+            if progress_message_id is None:
+                message = await update.message.reply_text(progress_report)
+                progress_message_id = message.message_id
+            else:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=progress_message_id,
+                    text=progress_report
+                )
+            await asyncio.sleep(5)
+    except BadRequest as e:
+                    # Se l'errore indica che il messaggio non è modificato, lo ignoriamo
+                    if "not modified" in str(e):
+                        pass
+                    else:
+                        # Se è un altro tipo di errore, stampalo o gestiscilo diversamente
+                        print(f"Errore nell'editing del messaggio: {e}")
+
 # Configurazione principale del bot
 def main():
     # Crea l'applicazione
@@ -147,6 +224,10 @@ def main():
     application.add_handler(CommandHandler("search", search_torrent))
     application.add_handler(CallbackQueryHandler(search_and_download_torrent))
     application.add_handler(CommandHandler("progress", download_progress))
+    application.add_handler(CommandHandler("monitor", monitor_downloads))
+
+
+
     # Avvia il bot con polling
     application.run_polling()
 
