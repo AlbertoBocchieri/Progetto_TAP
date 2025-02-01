@@ -3,8 +3,16 @@ from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import re
+from qbittorrentapi import Client
 from kafka import KafkaProducer
+from elasticsearch import Elasticsearch
 import json
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes
+)
 
 # Configura Kafka e Elasticsearch
 KAFKA_BROKER = "localhost:9092"
@@ -12,6 +20,8 @@ TOPIC_NAME = "torrent-topic"
 ES_HOST = "http://localhost:9200"
 INDEX_NAME = "torrent_data"
 TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
+
+es = Elasticsearch("http://localhost:9200")
 
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER,
@@ -92,6 +102,22 @@ async def search_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Errore durante la ricerca: {e}")
 
+async def search_and_download_torrent(update, context):
+    query = update.callback_query
+    torrent_name = query.data
+    print(f"Ricerca del torrent: {torrent_name}")
+    response = es.search(index="torrent_data", body={"query": {"match": {"title": torrent_name}}})
+    hits = response["hits"]["hits"]
+    if hits:
+        print(f"Torrent trovato: {hits[0]['_source']['title']}")
+        magnet_link = hits[0]["_source"]["magnet_link"]
+        qb = Client(host="localhost:8080", username="admin", password="admin")
+        qb.auth_log_in()
+        qb.torrents_add(urls=magnet_link)
+
+        await context.bot.send_message(chat_id=query.message.chat.id, text="Download di "+torrent_name+" avviato su qBittorrent!")
+
+
 # Configurazione principale del bot
 def main():
     # Crea l'applicazione
@@ -100,7 +126,7 @@ def main():
     # Gestori di comandi
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("search", search_torrent))
-
+    application.add_handler(CallbackQueryHandler(search_and_download_torrent))
     # Avvia il bot con polling
     application.run_polling()
 

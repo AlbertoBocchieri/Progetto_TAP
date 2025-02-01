@@ -60,7 +60,11 @@ def send_telegram_message(bot_token, chat_id, text):
             overview="Nessuna informazione disponibile"
             vote_average="Nessuna informazione disponibile"
 
-        callback_data = f"download|{magnet_hash}"
+        callback_data = f"{complete_title}"
+
+        if len(callback_data) > 64:
+            callback_data = callback_data[:64]
+
         keyboard = [[{"text": "Scarica Torrent", "callback_data": callback_data}]]
         reply_markup = {"inline_keyboard": keyboard}
         parsedText = f"🎥*Titolo:* {movie_title}\n🎬*Sinossi:* {overview}\n🍿*Voto:* {vote_average}"
