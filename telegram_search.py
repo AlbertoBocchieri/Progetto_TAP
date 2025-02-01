@@ -117,7 +117,26 @@ async def search_and_download_torrent(update, context):
 
         await context.bot.send_message(chat_id=query.message.chat.id, text="Download di "+torrent_name+" avviato su qBittorrent!")
 
+async def download_progress(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            try:
+                qb = Client(host="localhost:8080", username="admin", password="admin")
+                qb.auth_log_in()
+                torrents = qb.torrents_info()
+                if not torrents:
+                    await update.message.reply_text("Nessun torrent in download attivo.")
+                    return
 
+                progress_lines = []
+                for torrent in torrents:
+                    name = torrent.name if hasattr(torrent, "name") else torrent.get("name", "N/A")
+                    progress = getattr(torrent, "progress", 0.0)
+                    percent = round(progress * 100, 2)
+                    progress_lines.append(f"{name}: {percent}%")
+                    
+                await update.message.reply_text("Progresso Download:\n" + "\n".join(progress_lines))
+            except Exception as e:
+                await update.message.reply_text(f"Errore nel recupero dei progressi: {e}")
+        
 # Configurazione principale del bot
 def main():
     # Crea l'applicazione
@@ -127,6 +146,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("search", search_torrent))
     application.add_handler(CallbackQueryHandler(search_and_download_torrent))
+    application.add_handler(CommandHandler("progress", download_progress))
     # Avvia il bot con polling
     application.run_polling()
 
