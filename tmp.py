@@ -20,44 +20,22 @@ es = Elasticsearch([ES_HOST])
 # Inizializza Telegram Bot
 bot = Bot(token=TELEGRAM_TOKEN)
 
-def quality_score(title):
-    """
-    Calcola un punteggio di qualità per un torrent in base al titolo.
-    Più il punteggio è alto, maggiore è la qualità attesa.
-    """
-    score = 0
-    # Incrementa il punteggio se il titolo contiene indicatori di alta qualità
-    if "4K" in title or "2160p" in title:
-        score += 3
-    if "BDRemux" in title:
-        score += 2
-    if "HDR" in title:
-        score += 2
-    if "x265" in title:
-        score += 1
-    return score
+
 
 def send_telegram_message(bot_token, chat_id, text): 
     api_key = "b279545003f93c2f4a70ed5db82e9284"
     complete_title = text["title"]
 
-    # Estrai l'anno dal titolo completo
     match = re.search(r"\b\d{4}\b", complete_title)
-    if match:
-        year = match.group(0)
-    else:
-        year = "Anno non trovato"
+    year = match.group(0) if match else "Anno non trovato"
 
-    quality_score=quality_score(complete_title)
-
-    # Estrai il titolo del film dal titolo completo
     match = re.search(r"\b\d{4}\b", complete_title) 
     if match:
         movie_title = complete_title[:match.start()].strip()
     else:
         movie_title = complete_title
-    tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_title}&year={year}"
 
+    tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_title}&year={year}"
     try:
         tmdb_response = requests.get(tmdb_url).json()
         if tmdb_response.get("results"):
@@ -65,13 +43,11 @@ def send_telegram_message(bot_token, chat_id, text):
             poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
             overview = tmdb_response["results"][0].get("overview", "")
             vote_average = tmdb_response["results"][0].get("vote_average", "")
-
         else:
             poster_url = "https://image.tmdb.org/t/p/w500/gBhLQmpCPoKFMCGsulMbIFzrBID.jpg"
-            overview="Nessuna informazione disponibile"
-            vote_average="Nessuna informazione disponibile"
+            overview = "Nessuna informazione disponibile"
+            vote_average = "Nessuna informazione disponibile"
 
-        #Traduzione della sinossi in italiano
         if overview != "Nessuna informazione disponibile":
             tmdb_id = tmdb_response["results"][0].get("id", "")
             tmdb_url = f"https://api.themoviedb.org/3/movie/{tmdb_id}?api_key={api_key}&language=it-IT"
@@ -80,24 +56,25 @@ def send_telegram_message(bot_token, chat_id, text):
             movie_title = tmdb_response.get("title", "")
 
         callback_data = f"search_{complete_title}"
-
         if len(callback_data) > 64:
             callback_data = callback_data[:64]
 
-        keyboard = [[{"text": "Scarica Torrent", "callback_data": callback_data}]]
+        keyboard = [
+            [{"text": "Scarica Torrent", "callback_data": callback_data}],
+            [{"text": "👍", "callback_data": "thumbs_up"}, {"text": "👎", "callback_data": "thumbs_down"}]
+        ]
         reply_markup = {"inline_keyboard": keyboard}
-        parsedText = f"🎥*Titolo:* {movie_title}\n*Qualità:*🎬*Sinossi:* {overview}\n🍿*Voto:* {vote_average}"
+        parsedText = f"🎥*Titolo:* {movie_title}\n🎬*Sinossi:* {overview}\n🍿*Voto:* {vote_average}"
 
-        # Invia la locandina come foto
         send_photo_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"   
         photo_data = {
             "parse_mode": "Markdown",
             "chat_id": chat_id,
             "photo": poster_url,    
             "caption": parsedText,
-            "reply_markup": json.dumps(reply_markup)  # Serializza in JSON
+            "reply_markup": json.dumps(reply_markup)
         }
-        response=requests.post(send_photo_url, data=photo_data)
+        response = requests.post(send_photo_url, data=photo_data)
 
         if response.status_code == 200:
             print("Messaggio inviato con successo!")

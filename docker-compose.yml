@@ -25,20 +25,6 @@ services:
       timeout: 5s
       retries: 5
 
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.5.3
-    container_name: kibana
-    depends_on:
-      - elasticsearch
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      
-    ports:
-      - "5601:5601"
-
-    networks:
-      - app-network
-
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -61,17 +47,6 @@ services:
       KAFKA_SOCKET_REQUEST_MAX_BYTES: 200000000  # 200 MB
     depends_on:
       - zookeeper
-    
-  scraper:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: scraper
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
 
 networks:
   app-network:
