@@ -20,23 +20,6 @@ es = Elasticsearch([ES_HOST])
 # Inizializza Telegram Bot
 bot = Bot(token=TELEGRAM_TOKEN)
 
-def quality_score(title):
-    """
-    Calcola un punteggio di qualità per un torrent in base al titolo.
-    Più il punteggio è alto, maggiore è la qualità attesa.
-    """
-    score = 0
-    # Incrementa il punteggio se il titolo contiene indicatori di alta qualità
-    if "4K" in title or "2160p" in title:
-        score += 3
-    if "BDRemux" in title:
-        score += 2
-    if "HDR" in title:
-        score += 2
-    if "x265" in title:
-        score += 1
-    return score
-
 def send_telegram_message(bot_token, chat_id, text): 
     api_key = "b279545003f93c2f4a70ed5db82e9284"
     complete_title = text["title"]
@@ -47,8 +30,6 @@ def send_telegram_message(bot_token, chat_id, text):
         year = match.group(0)
     else:
         year = "Anno non trovato"
-
-    quality_score=quality_score(complete_title)
 
     # Estrai il titolo del film dal titolo completo
     match = re.search(r"\b\d{4}\b", complete_title) 

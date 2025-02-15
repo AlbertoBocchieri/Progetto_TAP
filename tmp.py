@@ -59,9 +59,17 @@ def send_telegram_message(bot_token, chat_id, text):
         if len(callback_data) > 64:
             callback_data = callback_data[:64]
 
+        thumbs_up_callback = f"thumbs_up|{complete_title[:45]}|{tmdb_id}"
+        thumbs_down_callback = f"thumbs_down|{complete_title[:45]}|{tmdb_id}"
+
+        if len(thumbs_up_callback) > 64:
+            thumbs_up_callback = thumbs_up_callback[:64]
+        if len(thumbs_down_callback) > 64:
+            thumbs_down_callback = thumbs_down_callback[:64]
+
         keyboard = [
             [{"text": "Scarica Torrent", "callback_data": callback_data}],
-            [{"text": "👍", "callback_data": "thumbs_up"}, {"text": "👎", "callback_data": "thumbs_down"}]
+            [{"text": "👍", "callback_data": thumbs_up_callback}, {"text": "👎", "callback_data": thumbs_down_callback}]
         ]
         reply_markup = {"inline_keyboard": keyboard}
         parsedText = f"🎥*Titolo:* {movie_title}\n🎬*Sinossi:* {overview}\n🍿*Voto:* {vote_average}"
