@@ -1,13 +1,29 @@
 from bs4 import BeautifulSoup
+from kafka import KafkaProducer
+from elasticsearch import Elasticsearch
 import requests
 import re
+import json
 
 TMDB_API_KEY = "b279545003f93c2f4a70ed5db82e9284"
+KAFKA_BROKER = "localhost:9092"
+TOPIC_NAME = "torrent-topic"
+INDEX_NAME = "torrent_data"
 
+es = Elasticsearch("http://localhost:9200")
+
+producer = KafkaProducer(
+    bootstrap_servers=KAFKA_BROKER,
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+#Funzione per controllare la qualità del torrent
+def is_high_quality(title):
+    quality_keywords = ["4K", "2160p", "HDR", "BDRemux", "x265"]
+    return any(keyword.lower() in title.lower() for keyword in quality_keywords)
+
+#Funzione per fare scraping su KickassTorrents e salvare i torrent su un file csv
 def scrape_site():
-    """
-    Esegue lo scraping del sito per trovare nuovi torrent.
-    """ 
     page=1
     #url che parte da pagina 1
     while page <= 10:
@@ -24,6 +40,9 @@ def scrape_site():
         for item in soup.select(".odd, .even"):  # Cambia il selettore CSS se necessario
             title = re.sub(r'\s+', ' ', item.select_one(".torrentname").text).strip() 
 
+            if not is_high_quality(title):
+                continue
+
             #Uso TMDB per cercare il film e ottenere movie_id e rating
             match = re.search(r"\b\d{4}\b", title)
             if match:
@@ -31,6 +50,24 @@ def scrape_site():
             else:
                 movie_title = title
 
+            torrent_page_url = "https://kickasstorrent.cr" + item.select_one(".torrentname a")["href"]
+            torrent_response = requests.get(torrent_page_url, headers=headers)
+            
+            if torrent_response.status_code != 200:
+                continue
+
+            torrent_soup = BeautifulSoup(torrent_response.text, "html.parser")
+            magnet_link = torrent_soup.select_one(".kaGiantButton")["href"]
+            
+            torrent_data = {
+                "title": title,
+                "magnet_link": magnet_link,
+            }
+
+            #Salva il torrent su un altro file csv
+            with open('torrents.csv', 'a') as f:
+                f.write(f"{torrent_data['title']},{torrent_data['magnet_link']}\n")
+            
             tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_title}"
             try:
                 tmdb_response = requests.get(tmdb_url).json()
@@ -58,12 +95,23 @@ def scrape_site():
 
         page += 1
         
-
+#Funzione per indicizzare i torrent dal file su Elasticsearch
+def index_torrents():
+    with open("torrents.csv", "r") as f:
+        for line in f:
+            title, magnet_link = line.strip().split(",")
+            doc = {
+                "title": title,
+                "magnet_link": magnet_link
+            }
+            es.index(index=INDEX_NAME, body=doc)
+            print(f"Torrent indicizzato: {title}")
 
 if __name__ == "__main__":
     print("Avvio scraping...")
     try:
-        scrape_site()
-        print("Scraping completato!")
+        #scrape_site()
+        index_torrents()
+        print("Scraping/Indexing completato!")
     except Exception as e:
         print(f"Errore durante l'esecuzione dello scraping: {e}")

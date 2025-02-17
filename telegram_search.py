@@ -18,7 +18,7 @@ from telegram.ext import (
     ContextTypes
 )
 from pyspark.sql import SparkSession
-from pyspark.ml.recommendation import ALS
+from pyspark.ml.recommendation import ALS, ALSModel
 from pyspark.sql.functions import col
 from pyspark.sql.functions import udf
 from pyspark.sql.types import BooleanType
@@ -26,6 +26,7 @@ from pyspark.ml.evaluation import RegressionEvaluator
 from datetime import datetime
 from packaging.version import Version
 from pyspark.sql.types import LongType
+import random
 
 qbt_client = Client(host='localhost', port=8080, username='admin', password='adminadmin')
 progress_message_id = None
@@ -47,14 +48,32 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v).encode('utf-8')
 )
 
-# Handlers per i comandi Telegram
+#Handlers per i comandi Telegram
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Ciao! Usa /search seguito dal nome del torrent per cercare un file torrent. 🎥")
 
+#Verifica se nel nome del torrent ci sono parole chiave che indicano alta qualità
 def is_high_quality(title):
     quality_keywords = ["4K", "2160p", "HDR", "BDRemux", "x265"]
     return any(keyword.lower() in title.lower() for keyword in quality_keywords)
 
+#Carica il modello ALS per i consigli
+def load_model(spark, path):
+    model = ALSModel.load(path)
+    print(f"Modello caricato da {path}")
+    return model
+
+#Funzione che raccomanda i un tot di film per un utente
+def recommend_movies_for_user(model, user_id, top_n):
+    user_df = model.userFactors.sparkSession.createDataFrame([(user_id,)], ["user_id"])
+    recs_df = model.recommendForUserSubset(user_df, top_n)
+    recs = recs_df.collect()
+    if recs:
+        recommended_ids = [rec.movie_id for rec in recs[0]["recommendations"]]
+        return recommended_ids
+    return []
+
+#Funzione che cerca il film su KickassTorrents e manda i risultati a Kafka
 async def search_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Specifica il nome del torrent!\nEsempio: `/search nome del film`")
@@ -67,7 +86,7 @@ async def search_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         while True:
-            url = f"https://kickasstorrent.cr/usearch/{search_query} ita nahom/{page}/"
+            url = f"https://kickasstorrent.cr/usearch/{search_query} nahom/{page}/"
             response = requests.get(url, headers=headers)
 
             if response.status_code != 200:
@@ -85,7 +104,7 @@ async def search_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 if not is_high_quality(title):
                     continue
-
+                
                 torrent_page_url = "https://kickasstorrent.cr" + item.select_one(".torrentname a")["href"]
                 torrent_response = requests.get(torrent_page_url, headers=headers)
                 
@@ -110,8 +129,9 @@ async def search_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("⚠️ Nessun risultato trovato.")
     except Exception as e:
-        await update.message.reply_text(f"❌ Errore: {e}")
+        await update.message.reply_text(f"⚠️Ricerca conclusa")
 
+#Funzione che cerca il torrent su Elasticsearch e lo scarica
 async def search_and_download_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -126,6 +146,7 @@ async def search_and_download_torrent(update: Update, context: ContextTypes.DEFA
     else:
         await context.bot.send_message(chat_id=query.message.chat.id, text=f"Nessun risultato per {torrent_name}")
 
+#Funzione che recupera lo stato dei download da qBittorrent
 async def get_download_progress(qbt_client):
     try:
         torrents = await asyncio.to_thread(qbt_client.torrents_info)
@@ -154,6 +175,7 @@ async def get_download_progress(qbt_client):
     except Exception as e:
         return f"Errore: {e}", None
 
+#Funzione che monitora lo stato dei download
 async def monitor_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global progress_message_id
     try:
@@ -180,18 +202,21 @@ async def monitor_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Errore: {e}")
 
+#Funzione per avviare il monitoraggio dei download
 async def start_monitor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global monitor_task
     if monitor_task is None or monitor_task.done():
         monitor_task = asyncio.create_task(monitor_downloads(update, context))
         await update.message.reply_text("Monitoraggio avviato!")
 
+#Funzione per interrompere il monitoraggio dei download
 async def stop_monitor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global monitor_task
     if monitor_task and not monitor_task.done():
         monitor_task.cancel()
         monitor_task = None
 
+#Funzione per fermare o riprendere un download
 async def stop_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -206,11 +231,13 @@ async def stop_torrent(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.to_thread(qbt_client.torrents_pause, torrent_hashes=torrent_hash)
         await query.edit_message_text(f"⏸️ Download fermato: {torrent_hash}")
 
+#Funzione per aggiornare lo stato dei download
 async def refresh_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await monitor_downloads(update, context)
 
+#Funzioni per il feedback
 async def thumbs_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -224,7 +251,9 @@ async def thumbs_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "feedback": 1,
             "timestamp": datetime.now().isoformat()
         }
-        es.index(index=USER_FEEDBACK_INDEX, body=doc)
+        es.index(index=USER_FEEDBACK_INDEX, document=doc)
+    #Mando un messaggio all'utente per confermare il feedback
+    await query.message.reply_text("👍 Grazie per il feedback!")
 
 async def thumbs_down(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -239,8 +268,47 @@ async def thumbs_down(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "feedback": -1,
             "timestamp": datetime.now().isoformat()
         }
-        es.index(index=USER_FEEDBACK_INDEX, body=doc)
+        es.index(index=USER_FEEDBACK_INDEX, document=doc)
+    await query.message.reply_text("👍 Grazie per il feedback!")
 
+#Funzione per raccomandare un film all'utente
+async def consigliami(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    spark = SparkSession.builder \
+        .appName("MovieRecommendation") \
+        .getOrCreate()
+    model_save_path = "models/als_model"
+    model = load_model(spark, model_save_path)
+
+    user_id = 123  # Esempio di utente
+    recommendations = recommend_movies_for_user(model, user_id, top_n=10)
+
+    #Dalle raccomandazioni ne scelgo una a caso, la cerco su TMDB e invio il titolo a kafka
+    if recommendations:
+        random_movie_id = random.choice(recommendations)
+        # Cerca il film su TMDB
+        tmdb_url = f"https://api.themoviedb.org/3/movie/{random_movie_id}?api_key={TMDB_API_KEY}"
+
+        try:
+            tmdb_response = requests.get(tmdb_url).json()
+            if tmdb_response.get("title"):
+                movie_title = tmdb_response["title"]
+                print(f"Trovato su TMDB: {movie_title}")
+                search_reccomended(movie_title)
+            else:
+                print("Titolo non trovato")
+        except Exception as e:
+            print("Errore durante la ricerca del film:", e)
+    print(f"Raccomandazione per l'utente {user_id}: {movie_title}")
+
+#Funzione che prende il movie_title e lo cerca su Elasticsearch
+def search_reccomended(movie_title):
+    print(f"Ricerca di {movie_title} su Elasticsearch...")
+    response = es.search(index=INDEX_NAME, body={"query": {"match": {"title": movie_title}}})
+    if response["hits"]["hits"]:
+        magnet_link = response["hits"]["hits"][0]["_source"]["magnet_link"]
+        producer.send(TOPIC_NAME, {"title": movie_title, "magnet_link": magnet_link})
+    else:
+        print(f"Nessun risultato per {movie_title}")
 
 def main():
     # Crea l'applicazione
@@ -256,11 +324,11 @@ def main():
     application.add_handler(CallbackQueryHandler(refresh_status, pattern="^refresh_status"))
     application.add_handler(CallbackQueryHandler(thumbs_up, pattern="^thumbs_up"))
     application.add_handler(CallbackQueryHandler(thumbs_down, pattern="^thumbs_down"))
-    #application.add_handler(CommandHandler("consigliami", consigliami))
+    application.add_handler(CommandHandler("consigliami", consigliami))
 
     # Avvia il bot con polling
     application.run_polling()
 
-# Esegui il bot
+# Esegue il bot
 if __name__ == "__main__":
     main()

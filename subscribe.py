@@ -33,6 +33,7 @@ if not es.indices.exists(index=INDEX_NAME):
         }
     })
 
+# Funzione per controllare se un torrent esiste già in Elasticsearch
 def torrent_exists(title):
     """
     Controlla se un torrent esiste già in Elasticsearch basandosi sul titolo completo.
@@ -50,6 +51,7 @@ def torrent_exists(title):
     response = es.search(index=INDEX_NAME, body=query)
     return response["hits"]["total"]["value"] > 0
 
+# Funzione per eseguire lo scraping del sito e inviare i nuovi torrent a Kafka
 def scrape_site():
     """
     Esegue lo scraping del sito per trovare nuovi torrent.
@@ -97,8 +99,6 @@ def scrape_site():
         torrents.append(torrent_data)
 
     return torrents
-
-
 
 if __name__ == "__main__":
     print("Avvio scraping...")

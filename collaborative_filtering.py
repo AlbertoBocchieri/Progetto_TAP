@@ -1,60 +1,59 @@
-import pandas as pd
-import numpy as np
-from elasticsearch import Elasticsearch
-from sklearn.metrics.pairwise import cosine_similarity
+from pyspark.sql import SparkSession
+from pyspark.ml.recommendation import ALS, ALSModel
+from pyspark.sql.functions import col
 
 def prepare_dataset(csv_path):
-    print(f"Caricamento del dataset da {csv_path}...")
-    df = pd.read_csv(csv_path)
-    print("Dataset caricato. Creazione della matrice user-item...")
-    user_item_matrix = df.pivot_table(index='user_id', columns='movie_id', values='rating', fill_value=0)
-    print("Matrice user-item creata.")
-    return user_item_matrix
+    spark = SparkSession.builder \
+        .appName("MovieRecommendation") \
+        .getOrCreate()
+    df = spark.read.csv(csv_path, header=True, inferSchema=True)
+    return df, spark
 
-def train_item_based_model(user_item_matrix):
-    print("Calcolo della similarità tra i film...")
-    similarity_matrix = cosine_similarity(user_item_matrix.T)
-    film_ids = user_item_matrix.columns
-    print("Similarità calcolata. Creazione del DataFrame delle similarità...")
-    sim_df = pd.DataFrame(similarity_matrix, index=film_ids, columns=film_ids)
-    print("DataFrame delle similarità creato.")
-    return sim_df
+def train_model(df):
+    als = ALS(
+        userCol="user_id",
+        itemCol="movie_id",
+        ratingCol="rating",
+        coldStartStrategy="drop"
+    )
+    model = als.fit(df)
+    return model
 
-def store_model_in_elasticsearch(sim_df, es_index='item_similarity'):
-    print(f"Connessione a Elasticsearch e creazione dell'indice '{es_index}' se non esiste...")
-    es = Elasticsearch("http://localhost:9200")
-    if not es.indices.exists(index=es_index):
-        es.indices.create(index=es_index)
-        print(f"Indice '{es_index}' creato.")
-    else:
-        print(f"Indice '{es_index}' già esistente.")
+def save_model(model, path):
+    # Salva il modello, sovrascrivendo se già esistente
+    model.write().overwrite().save(path)
+    print(f"Modello salvato in {path}")
+
+def load_model(spark, path):
+    model = ALSModel.load(path)
+    print(f"Modello caricato da {path}")
+    return model
+
+def recommend_movies_for_user(model, user_id, top_n=5):
+    user_df = model.userFactors.sparkSession.createDataFrame([(user_id,)], ["user_id"])
+    recs_df = model.recommendForUserSubset(user_df, top_n)
+    recs = recs_df.collect()
+    if recs:
+        recommended_ids = [rec.movie_id for rec in recs[0]["recommendations"]]
+        return recommended_ids
+    return []
+
+
+if __name__ == "__main__":
+    csv_path = "kickass_dataset.csv"  # Il dataset dei film: user_id, movie_id, rating
+    model_save_path = "models/als_model"  # Directory dove salvare il modello
+
+    df, spark = prepare_dataset(csv_path)
     
-    print("Indicizzazione delle similarità per ogni film...")
-    for film in sim_df.index:
-        similar_items = sim_df.loc[film].to_dict()
-        es.index(index=es_index, id=film, body={'similar_items': similar_items})
-    print("Indicizzazione completata.")
-
-def recommend_movies_for_user(user_id, user_item_matrix, sim_df, top_n=5):
-    print(f"Raccomandazione di film per l'utente {user_id}...")
-    user_ratings = user_item_matrix.loc[user_id]
-    liked_films = user_ratings[user_ratings == 1].index.tolist()
-    scores = pd.Series(0, index=user_item_matrix.columns)
-    for film in liked_films:
-        scores += sim_df[film]
-    scores = scores[user_ratings == 0]
-    recommendations = scores.nlargest(top_n).index.tolist()
-    print(f"Film raccomandati per l'utente {user_id}: {recommendations}")
-    return recommendations
-
-if __name__ == '__main__':
-
-    dataset_csv = 'kickass_dataset.csv'
-    print("Preparazione del dataset...")
-    user_item_mat = prepare_dataset(dataset_csv)
-    print("Addestramento del modello basato sugli item...")
-    sim_df = train_item_based_model(user_item_mat)
-    print("Memorizzazione del modello in Elasticsearch...")
-    store_model_in_elasticsearch(sim_df)
-    user_id_test = 123
-    consigli = recommend_movies_for_user(user_id_test, user_item_mat, sim_df, top_n=5)
+    try:
+        model = load_model(spark, model_save_path)
+    except Exception as e:
+        print("Modello non trovato, addestramento in corso...")
+        model = train_model(df)
+        save_model(model, model_save_path)
+    
+    user_id = 123  # Esempio di utente
+    recommendations = recommend_movies_for_user(model, user_id, top_n=5)
+    print(f"Raccomandazioni per l'utente {user_id}: {recommendations}")
+    
+    spark.stop()

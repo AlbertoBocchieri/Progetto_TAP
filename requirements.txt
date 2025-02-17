@@ -1,4 +1,8 @@
 elasticsearch==8.10.0
 requests
 beautifulsoup4
-kafka-python
+kafka-python-ng
+python-telegram-bot
+qbittorrent-api
+pyspark==3.5.0
+numpy
