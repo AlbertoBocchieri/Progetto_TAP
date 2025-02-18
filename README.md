@@ -1,7 +1,6 @@
-# **Technologies for Advanced Programming**
+# **Progetto Technologies for Advanced Programming**
 
 *Autore: Alberto Bocchieri*  
-*Data: 2025-XX-XX*
 
 ## **Introduzione**
 
