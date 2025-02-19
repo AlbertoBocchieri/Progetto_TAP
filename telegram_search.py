@@ -276,7 +276,7 @@ async def consigliami(update: Update, context: ContextTypes.DEFAULT_TYPE):
     spark = SparkSession.builder \
         .appName("MovieRecommendation") \
         .getOrCreate()
-    model_save_path = "models/als_model"
+    model_save_path = "models2/als_model"
     model = load_model(spark, model_save_path)
 
     user_id = 123  # Esempio di utente

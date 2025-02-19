@@ -40,8 +40,8 @@ def recommend_movies_for_user(model, user_id, top_n=5):
 
 
 if __name__ == "__main__":
-    csv_path = "kickass_dataset.csv"  # Il dataset dei film: user_id, movie_id, rating
-    model_save_path = "models/als_model"  # Directory dove salvare il modello
+    csv_path = "kickass_dataset2.csv"  # Il dataset dei film: user_id, movie_id, rating
+    model_save_path = "models2/als_model"  # Directory dove salvare il modello
 
     df, spark = prepare_dataset(csv_path)
     

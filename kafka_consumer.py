@@ -38,6 +38,18 @@ def sanitize_callback_data(text, max_length=64):
     text = text.replace(" ", " ")
     return text[:max_length]
 
+def extract_quality_tags(torrent_title):
+    # Lista di tag
+    quality_tags = ["4K", "2160p", "HDR", "BDRemux", "x265", "UHD"]
+    found_tags = []
+    for tag in quality_tags:
+        # Cerca il tag come parola intera, ignorando il case
+        if re.search(r'\b' + re.escape(tag) + r'\b', torrent_title, re.IGNORECASE):
+            found_tags.append(tag)
+    if found_tags.__len__() == 0:
+        found_tags.append("4K")
+    return found_tags
+
 # Funzione per inviare un messaggio Telegram con locandina, titolo, sinossi e voto del film
 def send_telegram_message(bot_token, chat_id, text): 
     api_key = "b279545003f93c2f4a70ed5db82e9284"
@@ -51,6 +63,9 @@ def send_telegram_message(bot_token, chat_id, text):
         movie_title = complete_title[:match.start()].strip()
     else:
         movie_title = complete_title
+    
+    #Elenco dei tag che identificano la qualità del torrent
+    quality_tags = extract_quality_tags(complete_title)
 
     tmdb_url = f"https://api.themoviedb.org/3/search/movie?api_key={api_key}&query={movie_title}&year={year}"
     try:
@@ -91,7 +106,7 @@ def send_telegram_message(bot_token, chat_id, text):
             [{"text": "👍", "callback_data": thumbs_up_callback}, {"text": "👎", "callback_data": thumbs_down_callback}]
         ]
         reply_markup = {"inline_keyboard": keyboard}
-        parsedText = f"🎥*Titolo:* {movie_title}\n🎬*Sinossi:* {overview}\n🍿*Voto:* {vote_average}"
+        parsedText = f"🎥*Titolo:* {movie_title}\n🎬*Sinossi:* {overview}\n🍿*Voto:* {vote_average}\n*🔖Qualità del torrent:* {quality_tags}"
 
         send_photo_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"   
         photo_data = {

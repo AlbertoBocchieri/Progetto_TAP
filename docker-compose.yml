@@ -5,8 +5,8 @@ services:
     environment:
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - xpack.security.enabled=false                # Disabilita la sicurezza
-      - xpack.security.http.ssl.enabled=false       # Disabilita SSL su HTTP  
+      - xpack.security.enabled=false                
+      - xpack.security.http.ssl.enabled=false         
 
     ulimits:
       memlock:
@@ -25,26 +25,6 @@ services:
       timeout: 5s
       retries: 5
 
-  spark-master:
-    image: bitnami/spark:latest
-    container_name: spark-master
-    environment:
-      - SPARK_MODE=master
-    ports:
-      - "7077:7077"
-      - "8081:8081"  # Spark UI
-    depends_on:
-      - kafka
-      - elasticsearch
-
-  spark-worker:
-    image: bitnami/spark:latest
-    container_name: spark-worker
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-    depends_on:
-      - spark-master
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -62,12 +42,12 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_MESSAGE_MAX_BYTES: 200000000 # 200 MB
-      KAFKA_MAX_REQUEST_SIZE: 200000000 # 200 MB
-      KAFKA_SOCKET_REQUEST_MAX_BYTES: 200000000  # 200 MB
+      KAFKA_MESSAGE_MAX_BYTES: 200000000 
+      KAFKA_MAX_REQUEST_SIZE: 200000000 
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 200000000 
     depends_on:
       - zookeeper
-
+  
 networks:
   app-network:
     driver: bridge
