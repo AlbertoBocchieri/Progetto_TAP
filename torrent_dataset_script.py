@@ -5,7 +5,7 @@ import requests
 import re
 import json
 
-TMDB_API_KEY = "b279545003f93c2f4a70ed5db82e9284"
+TMDB_API_KEY = ""
 KAFKA_BROKER = "localhost:9092"
 TOPIC_NAME = "torrent-topic"
 INDEX_NAME = "torrent_data"
