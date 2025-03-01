@@ -13,7 +13,7 @@ KAFKA_BROKER = "localhost:9092"
 TOPIC_NAME = "torrent-topic"
 ES_HOST = "http://localhost:9200"
 INDEX_NAME = "torrent_data"
-TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
+TELEGRAM_TOKEN = ""
 
 # Inizializza il producer Kafka
 producer = KafkaProducer(

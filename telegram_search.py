@@ -38,8 +38,8 @@ TOPIC_NAME = "torrent-topic"
 ES_HOST = "http://localhost:9200"
 INDEX_NAME = "torrent_data"
 USER_FEEDBACK_INDEX = "user_feedback"
-TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
-TMDB_API_KEY = "b279545003f93c2f4a70ed5db82e9284"
+TELEGRAM_TOKEN = ""
+TMDB_API_KEY = ""
 
 es = Elasticsearch("http://localhost:9200")
 

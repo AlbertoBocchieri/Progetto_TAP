@@ -11,8 +11,8 @@ KAFKA_BROKER = "localhost:9092"  # Sostituisci con il tuo broker Kafka
 TOPIC_NAME = "torrent-topic"
 ES_HOST = "http://localhost:9200"  # Sostituisci con il tuo endpoint Elasticsearch
 INDEX_NAME = "torrent_data"
-TELEGRAM_TOKEN = "7747935597:AAHjm45dio5SauGNyzlsx2YXWoRQxO6SmYQ"
-TELEGRAM_CHAT_ID = "221067200"
+TELEGRAM_TOKEN = ""
+TELEGRAM_CHAT_ID = ""
 
 # Inizializza Elasticsearch
 es = Elasticsearch([ES_HOST])
@@ -52,7 +52,7 @@ def extract_quality_tags(torrent_title):
 
 # Funzione per inviare un messaggio Telegram con locandina, titolo, sinossi e voto del film
 def send_telegram_message(bot_token, chat_id, text): 
-    api_key = "b279545003f93c2f4a70ed5db82e9284"
+    api_key = ""
     complete_title = text["title"]
 
     match = re.search(r"\b\d{4}\b", complete_title)
